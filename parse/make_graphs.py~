@@ -1,0 +1,41 @@
+import json
+import networkx as nx
+import matplotlib as plt
+
+nodes = None
+edges = None
+edges_with_dave = None
+with open('data-for-network.json', 'w+') as f:
+    data = json.loads(f.read())
+    nodes = data['nodes']
+    edges = data['edges']
+    edges_with_dave = data['edges_with_dave']
+
+def make_graph(nodes, edges, fignumber=1):    
+    plt.figure(fignumber)
+    G = nx.DiGraph()
+    for node in nodes:
+        G.add_node(node)
+    for edge in edges:
+        G.add_edge(*edge)
+
+    node_sizes = [300 + 100 * G.degree(n) for n in G.nodes()]
+    node_colors = [G.degree(n) for n in G.nodes()]
+    pos = nx.spring_layout(G, seed=42) 
+    nx.draw(
+        G, pos,
+        with_labels=True,
+        node_size=node_sizes,
+        node_color=node_colors,
+        cmap=plt.cm.viridis,
+        edge_color='gray',
+        linewidths=0.5,
+        font_size=10
+    )
+    
+    plt.show()
+    
+
+make_graph(nodes, edges, 1)
+nodes.append('mediabiasfactcheck.com')
+make_graph(nodes, edges_with_dave, 2)    
