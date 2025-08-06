@@ -1,4 +1,5 @@
 import json
+import jellyfish
 import networkx as nx
 from bs4 import BeautifulSoup
 import matplotlib.pyplot as plt
@@ -10,76 +11,71 @@ def load_data():
     with open(DATAFILE, 'r+') as f:
         return json.loads(f.read())
 
-    
-def parse_references(item):
-    html = item['contents']['html']
-    soup = BeautifulSoup(html, 'html.parser')
-    bib = soup.find_all('ul', {'class': 'ltx_biblist'})
-    if len(bib) != 1:
-        print('====')
-        print(f'Skipping reference parsing for item: {item['title']}')
-        print(item['title'])
-        print('====')
-        return []
-    bib = bib[0]
-    references = []
-    for citation in bib.find_all('li', {'class': 'ltx_bibitem'}):
-        possible_titles = citation.find_all(
-            'span', {'class': 'ltx_bibblock'}
-        )
-        possible_titles = [
-            pt.get_text().lstrip().rstrip().replace('\n', ' ')
-            for pt in possible_titles
-        ]
-        references.append(
-            possible_titles
-        )
-    return references
-
-        
-def find_edges(item, match_item):
+            
+def find_edges(paper, possible_citation):
     edges = []
-    for citation in item['citations']:
-        for possible_title in citation:
-            cleaned_match = match_item['title'].lstrip().rstrip().replace('\n', ' ').lower()
-            if (
-                    cleaned_match in possible_title.lower() 
-                    # possible_title.lower() in cleaned_match or
-                    # cleaned
-            ):
-                edges.append((
-                    item['title'],
-                    match_item['title']
-                ))
+    for citation in paper['citations']:
+        citation_doi = citation.get('doi')
+        pc_doi = possible_citation.get('doi')
+
+        if citation_doi is not None and pc_doi is not None:
+            if citation_doi == pc_doi:
+                print('----------------------')                
+                print('Match by DOI')
                 print('----------------------')
+                
+                edges.append((
+                    paper['title'],
+                    possible_citation['title']
+                ))
+                continue
+
+        # Even if DOI match failed, we try to match by title
+        # in case of inconsistenty in DOI
+        citation_title = citation.get('volume-title')
+        pc_title = possible_citation.get('title')
+        if citation_title is not None and pc_title is not None:
+            citation_title = ' '.join(
+                citation_title.split().lower().rstrip().lstrip()
+            )
+            possible_citation_title = ' '.join(
+                pc_title.split().lower().rstrip().lstrip()
+            )
+            if jellyfish.levenshtein_distance(
+                    citation_title,
+                    possible_citation_title
+            ) < 5:
+                edges.append((
+                    paper['title'],
+                    possible_citation['title']
+                ))
                 print('----------------------')                
                 print('Match!')
-                print(cleaned_match)
-                print(possible_title.lower())
+                print(citation_title)
+                print(possible_title)
                 print('----------------------')
-                print('----------------------')
-                break
-                    
+
     return edges
 
 
 def main():
     data = load_data()
+    data = [thing for thing in data if thing is not None]
     nodes = []
     edges = []
     edges_with_dave = []
     hits = 0
-    for i, item in enumerate(data):
+    for i, paper in enumerate(data):
         print(i)
-        if 'mediabiasfactcheck.com' in item['contents']['text'].lower():
+        if 'mediabiasfactcheck.com' in paper['contents'].lower():
             edges_with_dave.append(
-                ('mediabiasfactcheck.com', item['title'])
+                ('mediabiasfactcheck.com', paper['title'])
             )
-        item['citations'] = parse_references(item)
-        nodes.append(item['title'])
-        for match_item in data:
+
+        nodes.append(paper['title'])
+        for possible_citation in data:
             edges.extend(
-                find_edges(item, match_item)
+                find_edges(paper, possible_citation)
             )
             
     data = {
